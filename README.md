@@ -1,1 +1,3 @@
-# isletnet_validator
+# isletnet_score
+
+CEEHACKS project
