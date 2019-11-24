@@ -8,6 +8,7 @@ import os
 import pandas as pd
 import pickle
 from sklearn.preprocessing import StandardScaler
+import click
 
 PATH = 'testing_data'
 MODEL_PATH = 'models/encoder_cute_09.h5'
@@ -45,43 +46,50 @@ def compute_distances(reference, vector):
 
         sample = vector[i]
 
-        print(sample.shape)
-        print(reference.shape)
         data = np.sum((reference - sample) ** 2, axis=1)
         score = min(data)
         result.append(score)
-        print(sample)
-        print(reference[0])
-        print(reference[0] - sample)
-        print((reference[0] - sample) ** 2)
-        print(math.sqrt(sum((reference[0] - sample) ** 2)))
+
 
     return result
 
 
-
-if __name__ == '__main__':
-
+@click.command()
+@click.option('--img_path', prompt='path to images to score',
+              help='Path to the original input images.')
+@click.option('--store_csv/--not_store_csv', default=False,
+              help='True if store scores in csv format')
+def measure(img_path='', store_csv=False):
+    # check, if the path is valid
+    if not os.path.isdir(img_path):
+        print(f'"{img_path}" is not a directory.')
+        return
 
     # load PCA
     with open(PCA_PATH, 'rb') as file:
         pca = pickle.load(file)
-
-    # load PCA data
     reference_data = np.load(PCA_DATA)
 
     # load encoder
     model = load_model(MODEL_PATH)
 
     # get image names
-    names = os.listdir(PATH)
+    names = os.listdir(img_path)
 
     result = pd.DataFrame()
     seznam = []
 
-    for name in names:
+    result_folder = os.path.join('scored')
+    if not os.path.isdir(result_folder):
+        os.mkdir(result_folder)
 
-        img = cv2.imread(os.path.join(PATH, name)) / 256 - .5
+    scores = {}
+
+    for name in names:
+        if not os.path.isfile(os.path.join(img_path, name)):
+            continue
+
+        img = cv2.imread(os.path.join(img_path, name)) / 256 - .5
         batches = crop_batches(img, 256)
 
         predictions = model.predict(batches, batch_size=8)
@@ -101,24 +109,39 @@ if __name__ == '__main__':
 
         distances = compute_distances(reference_data, pc_predictions)
 
-        # distances = np.log(distances)
+        distances = [np.log(d + 1) for d in distances]
 
-        #result[name] = distances
-
-        # distances. append(name)
         df1 = pd.DataFrame(distances)
         result = pd.concat([result,df1], ignore_index=True, axis=1)
 
 
-        print('_______________')
+        print('_____________')
 
-        print(name)
+        score = f'{np.median(distances):.03f}'
+        print(f'SCORE: {score} \t{name}')
+
+        scores[name] = float(score)
+
+        cv2.imwrite(os.path.join(result_folder, f'{score}_{name}'), img)
+
         #print(distances)
         #print(np.mean(distances))
         #print(np.min(distances), np.max(distances), np.var(distances))
 
-    result.columns = names
+    # print sorted
+    # for key in sorted(scores, key=scores.get, reverse=True):
+        # print('_____________')
+        # print(f'SCORE: {scores[key]} \t{key}')
 
-    result.T.to_csv('data_v2.csv')
+    if store_csv:
+        result.columns = names
+        result.T.to_csv('data_v4.csv')
+
+
+
+if __name__ == '__main__':
+    measure()
+
+
 
 
