@@ -1,16 +1,12 @@
-from keras.layers import Input, Conv2D, MaxPooling2D, UpSampling2D
-from keras.models import Model, load_model
-from keras.optimizers import Adam
+from keras.models import load_model
 import cv2
 import math
 import numpy as np
 import os
 import pandas as pd
 import pickle
-from sklearn.preprocessing import StandardScaler
 import click
 
-PATH = 'testing_data'
 MODEL_PATH = 'models/encoder_cute_09.h5'
 PCA_PATH = 'models/pca_model_cute.pkl'
 PCA_DATA = 'models/pca_data_cute.npy'
@@ -50,16 +46,15 @@ def compute_distances(reference, vector):
         score = min(data)
         result.append(score)
 
-
     return result
 
 
 @click.command()
-@click.option('--img_path', prompt='path to images to score',
+@click.option('--img_path', default='images',
               help='Path to the original input images.')
 @click.option('--store_csv/--not_store_csv', default=False,
               help='True if store scores in csv format')
-def measure(img_path='', store_csv=False):
+def measure(img_path='images', store_csv=False):
     # check, if the path is valid
     if not os.path.isdir(img_path):
         print(f'"{img_path}" is not a directory.')
@@ -77,9 +72,8 @@ def measure(img_path='', store_csv=False):
     names = os.listdir(img_path)
 
     result = pd.DataFrame()
-    seznam = []
 
-    result_folder = os.path.join('scored')
+    result_folder = os.path.join('images_scored')
     if not os.path.isdir(result_folder):
         os.mkdir(result_folder)
 
@@ -94,17 +88,12 @@ def measure(img_path='', store_csv=False):
 
         predictions = model.predict(batches, batch_size=8)
 
-        #print(predictions.shape)
-
         samples, j, k, l = predictions.shape
         df_predictions = pd.DataFrame(predictions.reshape((samples, j * k * l)))
-
-        #print(predictions.shape)
 
         # pca transformation
         features = df_predictions.columns
         x = df_predictions.loc[:, features].values
-        # x = StandardScaler().fit_transform(x)
         pc_predictions = pca.transform(x)
 
         distances = compute_distances(reference_data, pc_predictions)
@@ -113,7 +102,6 @@ def measure(img_path='', store_csv=False):
 
         df1 = pd.DataFrame(distances)
         result = pd.concat([result,df1], ignore_index=True, axis=1)
-
 
         print('_____________')
 
@@ -124,19 +112,9 @@ def measure(img_path='', store_csv=False):
 
         cv2.imwrite(os.path.join(result_folder, f'{score}_{name}'), img)
 
-        #print(distances)
-        #print(np.mean(distances))
-        #print(np.min(distances), np.max(distances), np.var(distances))
-
-    # print sorted
-    # for key in sorted(scores, key=scores.get, reverse=True):
-        # print('_____________')
-        # print(f'SCORE: {scores[key]} \t{key}')
-
     if store_csv:
         result.columns = names
         result.T.to_csv('data_v4.csv')
-
 
 
 if __name__ == '__main__':
