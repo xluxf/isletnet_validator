@@ -7,6 +7,9 @@ import pandas as pd
 import pickle
 import click
 
+from sklearn.preprocessing import StandardScaler
+
+
 MODEL_PATH = 'models/encoder_cute_09.h5'
 PCA_PATH = 'models/pca_model_cute.pkl'
 PCA_DATA = 'models/pca_data_cute.npy'
@@ -83,7 +86,8 @@ def measure(img_path='images', store_csv=False):
         if not os.path.isfile(os.path.join(img_path, name)):
             continue
 
-        img = cv2.imread(os.path.join(img_path, name)) / 256 - .5
+        image = cv2.imread(os.path.join(img_path, name))
+        img = (image / 256)- .5
         batches = crop_batches(img, 256)
 
         predictions = model.predict(batches, batch_size=8)
@@ -94,6 +98,7 @@ def measure(img_path='images', store_csv=False):
         # pca transformation
         features = df_predictions.columns
         x = df_predictions.loc[:, features].values
+        #x = StandardScaler().fit_transform(x)
         pc_predictions = pca.transform(x)
 
         distances = compute_distances(reference_data, pc_predictions)
@@ -105,12 +110,12 @@ def measure(img_path='images', store_csv=False):
 
         print('_____________')
 
-        score = f'{np.median(distances):.03f}'
+        score = f'{((np.mean(distances) - 8.5) * 20):.03f}'
         print(f'SCORE: {score} \t{name}')
 
         scores[name] = float(score)
 
-        cv2.imwrite(os.path.join(result_folder, f'{score}_{name}'), img)
+        cv2.imwrite(os.path.join(result_folder, f'{score}_{name}'), image)
 
     if store_csv:
         result.columns = names
